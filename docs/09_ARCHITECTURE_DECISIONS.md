@@ -3,9 +3,9 @@
 **Version:** 1.0
 
 ## ADR-001: User-defined lifespan and maintenance intervals
-**Status:** Accepted
+**Status:** Accepted (Finalized)
 
-**Decision:** Users enter expected lifespan, warranty dates and maintenance intervals. The application may provide editable suggestions only when a reliable source is available; the MVP will not claim universal default lifespans.
+**Decision:** Users enter expected lifespan, warranty dates and maintenance intervals. Do not hardcode manufacturer lifespan recommendations in the application; all expected lifespans and maintenance intervals must be user-entered estimates.
 
 **Reason:** Component life varies by manufacturer, model, usage, climate, load and maintenance. A universal value could mislead users.
 
@@ -57,9 +57,9 @@
 **Consequence:** A component may have separate calendar and distance schedules if both are required.
 
 ## ADR-007: Preserve replaced component history
-**Status:** Accepted
+**Status:** Accepted (Finalized)
 
-**Decision:** Replacement creates a new component record and marks the previous component as replaced.
+**Decision:** Replacement creates a new component record and marks the previous component as replaced. Maintenance schedules are **not** copied automatically without user consent; the UI provides an optional "Copy maintenance schedules from previous part" choice.
 
 **Reason:** Maintains lifecycle and service history.
 
@@ -74,9 +74,16 @@
 
 **Consequence:** Quotas, inactivity policies, sender verification and deployment restrictions must be checked periodically.
 
+## ADR-009: Authoritative database-side derived fields
+**Status:** Accepted (Finalized)
+
+**Decision:**
+1. `parts.expected_replacement_on` is computed and maintained authoritatively by a PostgreSQL `BEFORE INSERT OR UPDATE` trigger using the documented month-end clamping rule. The frontend uses a matching pure TypeScript helper for live previews, tested against identical boundary cases.
+2. `odometer_readings` is the historical source of truth; `vehicles.current_odometer_km` is updated atomically via database trigger/RPC when readings are inserted or corrected.
+
 ## Open decisions to resolve during implementation
-1. Exact Supabase scheduling mechanism supported by the selected project plan.
-2. Email provider and current free-tier limits.
+1. Exact Supabase scheduling mechanism (`pg_cron` + `pg_net`, GitHub Actions, or an external scheduler): **must verify actual availability, restrictions, and free-tier limits of the chosen Supabase plan before selecting**. Do not assume any scheduling feature is free or permanently available.
+2. Email provider and current free-tier limits (only after in-app notifications are implemented and tested).
 3. Whether account deletion is implemented in MVP or documented as a manual support process.
 4. Whether registration number is mandatory or optional. Recommended: optional, unique per user when supplied.
 5. Whether a component can have multiple simultaneous date and distance schedules. Recommended: yes, as separate schedule records.

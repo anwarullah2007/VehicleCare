@@ -70,6 +70,10 @@ Fields:
 
 Show a preview of expected replacement date when enough data is supplied. Explain that this is an estimate based on user-entered data.
 
+When replacing an existing component:
+- Do not automatically copy maintenance schedules from the previous part without user consent.
+- Provide an explicit optional checkbox/toggle: "Copy maintenance schedules from previous part".
+
 ### 3.6 Maintenance schedule
 - Schedule name.
 - Schedule type: calendar interval or odometer interval.

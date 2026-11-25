@@ -69,7 +69,7 @@ Requirements:
 ## 5. Scheduled reminder function
 
 ### Trigger
-Run once per day initially. The exact scheduler mechanism and available quota must be verified in the selected Supabase plan.
+Run once per day initially. Before selecting `pg_cron`, `pg_net`, GitHub Actions, or an external scheduler, verify the actual availability, restrictions, and free-tier limits of the chosen Supabase plan. Do not assume a scheduling feature is free or permanently available.
 
 ### Processing steps
 1. Load eligible active parts and schedules.

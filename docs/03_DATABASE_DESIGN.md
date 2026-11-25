@@ -29,6 +29,19 @@ erDiagram
     PROFILES ||--|| REMINDER_SETTINGS : configures
 ```
 
+## 2.1 Eight-table summary and relationships
+
+| Table | Purpose | Primary Relationships |
+|---|---|---|
+| `profiles` | Stores user display name and timezone preferences linked to authentication identity. | 1:1 with `auth.users(id)`; 1:N with `vehicles`, `notifications`; 1:1 with `reminder_settings`. |
+| `vehicles` | Stores user-owned two-wheelers and four-wheelers, optional registration info, archival state, and cached latest odometer reading. | N:1 to `profiles(id)`; 1:N with `parts`, `odometer_readings`. |
+| `parts` | Stores vehicle components, installation/purchase details, independent warranty dates, user-entered lifespan, derived replacement estimate, and lifecycle status. | N:1 to `vehicles(id)`; 1:N with `maintenance_schedules`, `maintenance_records`; optional self-reference `replaced_by_part_id` -> `parts(id)`. |
+| `maintenance_schedules` | Stores recurring calendar (`DATE_INTERVAL`) or distance (`ODOMETER_INTERVAL`) maintenance rules per component. | N:1 to `parts(id)`; 1:N optional reference from `maintenance_records`. |
+| `maintenance_records` | Preserves immutable historical records of completed services, repairs, inspections, and replacements. | N:1 to `parts(id)`; optional N:1 to `maintenance_schedules(id)`. |
+| `odometer_readings` | Append-only historical audit log of vehicle odometer readings in kilometres (source of truth for current odometer). | N:1 to `vehicles(id)`. |
+| `notifications` | Stores generated in-app reminder notifications, read state, email delivery tracking, and database-enforced `dedupe_key`. | N:1 to `profiles(id)`; optional N:1 to `parts(id)` and `maintenance_schedules(id)`. |
+| `reminder_settings` | Stores per-user notification channel toggles and configurable day/kilometre reminder offsets. | 1:1 with `profiles(id)` (`user_id` as PK/FK). |
+
 ## 3. Tables
 
 ### 3.1 profiles
@@ -61,7 +74,7 @@ Create a profile when an Auth user is created, using a secure database trigger o
 Constraints:
 - If registration_number is supplied, normalize whitespace/case before uniqueness checking.
 - Prefer a unique index on `(user_id, normalized_registration_number)` for non-null values.
-- `current_odometer_km` is a cache/convenience field; odometer history remains the audit source.
+- `odometer_readings` is the historical source of truth for odometer values. `vehicles.current_odometer_km` is a cached convenience field that must be updated atomically (via database trigger on `odometer_readings` or transactional RPC) whenever readings are recorded or corrected, never by an unguarded separate client update.
 
 ### 3.3 parts
 | Column | Type | Rules |
@@ -86,7 +99,7 @@ Constraints:
 
 Rules:
 - `expected_replacement_on` is derived from `installed_on` and `expected_lifespan_months`.
-- The application must keep derived values synchronized. Prefer a single trusted calculation path and test it.
+- A PostgreSQL `BEFORE INSERT OR UPDATE` trigger on `parts` is the single authoritative calculation path for persisting `expected_replacement_on` (using calendar-month addition clamped to the last valid day of the target month). The frontend uses an identical pure TypeScript helper for live preview, verified against the same boundary test cases.
 - Warranty dates are independent from expected replacement.
 - Do not delete historical component rows when replacing a part.
 

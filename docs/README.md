@@ -34,8 +34,8 @@ This folder contains the requirements, architecture, data model, security, integ
 VehicleCare is a reminder and record-keeping tool. It does not diagnose mechanical faults, determine actual component condition, guarantee safety, or replace the vehicle manufacturer's maintenance schedule or a qualified mechanic's inspection.
 
 ## How to use this pack
-1. Place this `docs` folder in the root of the Git repository.
-2. Give the AI coding agent `10_AI_AGENT_RULES.md` as its operating instruction.
+1. Keep this `docs/` folder in the root of the `VehicleCare` Git repository alongside the application source folders (`src/`, `supabase/`, etc.).
+2. Give the AI coding agent `docs/10_AI_AGENT_RULES.md` as its operating instruction.
 3. Ask the agent to review the full documentation and report contradictions or missing decisions.
 4. Do not ask it to generate the entire application in one prompt.
 5. Resolve open decisions and approve a milestone before implementation.

@@ -170,6 +170,7 @@ The MVP supports one user role: an individual vehicle owner. A user can manage m
 - Deleting or archiving a vehicle shall not accidentally erase historical information without a clear, documented policy.
 - The MVP should prefer archive/soft-delete for vehicles and components.
 - A component replacement shall create a new component record and mark the old component as replaced; old records shall be preserved.
+- Component replacement shall not automatically copy maintenance schedules from the replaced component without user consent; the UI shall provide an optional "Copy maintenance schedules from previous part" choice.
 
 ## 6. Business rules
 1. User-entered lifespan and intervals are estimates/instructions supplied by the owner, not authoritative mechanical advice.

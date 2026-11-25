@@ -107,11 +107,11 @@ Email is secondary to in-app notifications. If email delivery fails, the in-app 
 ### 4.3 Register a component
 1. User selects one of their vehicles.
 2. User enters component details and lifespan.
-3. Frontend calculates a preview of expected replacement date.
-4. Database stores source inputs and the calculated date (or calculation is performed in a trusted database/service layer).
-5. UI displays the estimate and its assumptions.
+3. Frontend calculates a live preview of `expected_replacement_on` using a pure TypeScript helper (`calculateExpectedReplacementDate`).
+4. On save, a PostgreSQL `BEFORE INSERT OR UPDATE` trigger on `parts` acts as the single authoritative calculation path and stores `expected_replacement_on` using the documented calendar-month addition and month-end clamping rule.
+5. UI displays the persisted estimate and its assumptions.
 
-The stored calculated date must be recalculated when relevant source fields change. Avoid having multiple inconsistent calculation implementations.
+To keep frontend previews and persisted database values consistent, both the TypeScript preview helper and the PostgreSQL trigger must implement the exact same month-end clamping rule and be verified against the same boundary test cases (month-end dates and leap years). The database trigger remains authoritative whenever `installed_on` or `expected_lifespan_months` is inserted or updated.
 
 ### 4.4 Complete maintenance
 1. User records the completed service date and optional odometer.
