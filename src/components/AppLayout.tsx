@@ -13,6 +13,8 @@ import type { NavSection, Profile } from '@/types/domain';
 interface AppLayoutProps {
   activeSection: NavSection;
   onNavigate: (section: NavSection) => void;
+  onSignOut: () => void;
+  isSigningOut?: boolean;
   unreadCount: number;
   profile: Profile;
   children: ReactNode;
@@ -28,6 +30,8 @@ interface NavItem {
 export function AppLayout({
   activeSection,
   onNavigate,
+  onSignOut,
+  isSigningOut = false,
   unreadCount,
   profile,
   children,
@@ -103,14 +107,14 @@ export function AppLayout({
               VehicleCare
             </span>
             <span className="block text-[11px] font-medium text-slate-500">
-              Prototype (Mock Data)
+              Parts &amp; Maintenance
             </span>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">{renderNavLinks()}</div>
 
-        <div className="border-t border-slate-200 p-4">
+        <div className="border-t border-slate-200 p-4 space-y-2.5">
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="truncate text-sm font-semibold text-slate-900">
               {profile.fullName}
@@ -120,6 +124,14 @@ export function AppLayout({
               TZ: {profile.timezone}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={onSignOut}
+            disabled={isSigningOut}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          >
+            {isSigningOut ? 'Signing out...' : 'Sign Out'}
+          </button>
         </div>
       </aside>
 
@@ -169,9 +181,18 @@ export function AppLayout({
       {mobileMenuOpen ? (
         <div className="border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
           {renderNavLinks()}
-          <div className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
-            Signed in as <span className="font-semibold">{profile.fullName}</span>{' '}
-            ({profile.timezone})
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-600">
+            <span>
+              Signed in as <span className="font-semibold">{profile.fullName}</span>
+            </span>
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={isSigningOut}
+              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {isSigningOut ? 'Signing out...' : 'Sign Out'}
+            </button>
           </div>
         </div>
       ) : null}

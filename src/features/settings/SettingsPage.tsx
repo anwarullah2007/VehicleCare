@@ -4,7 +4,7 @@ import type { Profile, ReminderSettings } from '@/types/domain';
 
 interface SettingsPageProps {
   profile: Profile;
-  settings: ReminderSettings;
+  settings: ReminderSettings | null;
   onSaveProfile: (updated: Profile) => void;
   onSaveSettings: (updated: ReminderSettings) => void;
 }
@@ -25,12 +25,12 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [fullName, setFullName] = useState(profile.fullName);
   const [timezone, setTimezone] = useState(profile.timezone);
-  const [inAppEnabled, setInAppEnabled] = useState(settings.inAppEnabled);
-  const [emailEnabled, setEmailEnabled] = useState(settings.emailEnabled);
+  const [inAppEnabled, setInAppEnabled] = useState(settings?.inAppEnabled ?? false);
+  const [emailEnabled, setEmailEnabled] = useState(settings?.emailEnabled ?? false);
   const [daysInput, setDaysInput] = useState(
-    settings.reminderDaysBefore.join(', '),
+    settings?.reminderDaysBefore.join(', ') ?? '',
   );
-  const [kmBefore, setKmBefore] = useState(String(settings.reminderKmBefore));
+  const [kmBefore, setKmBefore] = useState(String(settings?.reminderKmBefore ?? 0));
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   function handleSubmit(event: React.FormEvent) {
@@ -47,7 +47,7 @@ export function SettingsPage({
     });
 
     onSaveSettings({
-      ...settings,
+      userId: profile.id,
       inAppEnabled,
       emailEnabled,
       reminderDaysBefore: parsedDays.length > 0 ? parsedDays : [30, 7, 0],

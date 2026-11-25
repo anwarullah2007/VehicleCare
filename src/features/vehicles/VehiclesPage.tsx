@@ -24,18 +24,19 @@ interface VehiclesPageProps {
   parts: Part[];
   odometerReadings: OdometerReading[];
   records: MaintenanceRecord[];
-  onAddVehicle: (vehicle: Omit<Vehicle, 'id' | 'userId' | 'isArchived'>) => void;
-  onAddPart: (part: Omit<Part, 'id' | 'replacedByPartId'>) => void;
+  onAddVehicle: (vehicle: Omit<Vehicle, 'id' | 'userId' | 'isArchived'>) => Promise<void>;
+  onUpdateVehicle: (
+    vehicleId: string,
+    vehicle: Omit<Vehicle, 'id' | 'userId' | 'isArchived'>,
+  ) => Promise<void>;
+  onAddPart: (part: Omit<Part, 'id' | 'replacedByPartId'>) => Promise<void>;
   onReplacePart: (
     oldPartId: string,
     newPart: Omit<Part, 'id' | 'replacedByPartId'>,
     copySchedules: boolean,
-  ) => void;
-  onAddOdometerReading: (
-    vehicleId: string,
-    readingKm: number,
-    note: string,
-  ) => void;
+  ) => Promise<void>;
+  onAddOdometerReading: (vehicleId: string, readingKm: number, note: string) => Promise<void>;
+  onDeleteVehicle: (vehicleId: string) => Promise<void>;
 }
 
 export function VehiclesPage({
@@ -44,22 +45,32 @@ export function VehiclesPage({
   odometerReadings,
   records,
   onAddVehicle,
+  onUpdateVehicle,
   onAddPart,
   onReplacePart,
   onAddOdometerReading,
+  onDeleteVehicle,
 }: VehiclesPageProps) {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     null,
   );
-  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [vehiclePendingDeletion, setVehiclePendingDeletion] =
+    useState<Vehicle | null>(null);
+  const [isDeletingVehicle, setIsDeletingVehicle] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const [showAddPartModal, setShowAddPartModal] = useState(false);
   const [showOdometerModal, setShowOdometerModal] = useState(false);
   const [replacingPart, setReplacingPart] = useState<Part | null>(null);
 
   // Add Vehicle form state
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [vehicleType, setVehicleType] = useState<VehicleType>('FOUR_WHEELER');
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
+
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [manufactureYear, setManufactureYear] = useState('');
 
@@ -88,28 +99,41 @@ export function VehiclesPage({
     setCopySchedules(false);
   }
 
-  function handleVehicleSubmit(event: React.FormEvent) {
+  async function handleVehicleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!brand.trim() || !model.trim()) return;
-    onAddVehicle({
-      vehicleType,
-      brand: brand.trim(),
-      model: model.trim(),
-      registrationNumber: registrationNumber.trim() || null,
-      manufactureYear: manufactureYear ? Number(manufactureYear) : null,
-      purchaseDate: null,
-      currentOdometerKm: null,
-    });
-    setBrand('');
-    setModel('');
-    setRegistrationNumber('');
-    setManufactureYear('');
-    setShowAddVehicleModal(false);
+    setActionError(null);
+    try {
+      const input = {
+        vehicleType,
+        brand: brand.trim(),
+        model: model.trim(),
+        registrationNumber: registrationNumber.trim() || null,
+        manufactureYear: manufactureYear ? Number(manufactureYear) : null,
+        purchaseDate: null,
+        currentOdometerKm: null,
+      };
+      if (editingVehicle) {
+        await onUpdateVehicle(editingVehicle.id, input);
+        setSelectedVehicleId(editingVehicle.id);
+        setEditingVehicle(null);
+      } else {
+        await onAddVehicle(input);
+      }
+      setBrand('');
+      setModel('');
+      setRegistrationNumber('');
+      setManufactureYear('');
+      setShowAddVehicleModal(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to save vehicle.');
+    }
   }
 
-  function handlePartSubmit(event: React.FormEvent) {
+  async function handlePartSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedVehicle || !partName.trim()) return;
+    setActionError(null);
 
     const payload: Omit<Part, 'id' | 'replacedByPartId'> = {
       vehicleId: selectedVehicle.id,
@@ -129,27 +153,53 @@ export function VehiclesPage({
       notes: null,
     };
 
-    if (replacingPart) {
-      onReplacePart(replacingPart.id, payload, copySchedules);
-      setReplacingPart(null);
-    } else {
-      onAddPart(payload);
-      setShowAddPartModal(false);
+    try {
+      if (replacingPart) {
+        await onReplacePart(replacingPart.id, payload, copySchedules);
+        setReplacingPart(null);
+      } else {
+        await onAddPart(payload);
+        setShowAddPartModal(false);
+      }
+      resetPartForm();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to save component.');
     }
-    resetPartForm();
   }
 
-  function handleOdometerSubmit(event: React.FormEvent) {
+  async function handleOdometerSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedVehicle || !readingKm) return;
-    onAddOdometerReading(
-      selectedVehicle.id,
-      Number(readingKm),
-      readingNote.trim(),
-    );
-    setReadingKm('');
-    setReadingNote('');
-    setShowOdometerModal(false);
+    const reading = Number(readingKm);
+    if (!selectedVehicle || !readingKm || !Number.isFinite(reading) || reading < 0) return;
+    setActionError(null);
+    try {
+      await onAddOdometerReading(
+        selectedVehicle.id,
+        reading,
+        readingNote.trim(),
+      );
+      setReadingKm('');
+      setReadingNote('');
+      setShowOdometerModal(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to save odometer reading.');
+    }
+  }
+
+  async function handleDeleteVehicle() {
+    if (!vehiclePendingDeletion) return;
+    setIsDeletingVehicle(true);
+    setActionError(null);
+    try {
+      await onDeleteVehicle(vehiclePendingDeletion.id);
+      setSelectedVehicleId(null);
+      setVehiclePendingDeletion(null);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to delete vehicle.');
+    } finally {
+      setIsDeletingVehicle(false);
+    }
   }
 
   function mapPartStatusBadge(status: PartStatus) {
@@ -187,7 +237,29 @@ export function VehiclesPage({
             <>
               <button
                 type="button"
-                onClick={() => setShowOdometerModal(true)}
+                onClick={() => {
+                  setVehicleType(selectedVehicle.vehicleType);
+                  setBrand(selectedVehicle.brand);
+                  setModel(selectedVehicle.model);
+                  setRegistrationNumber(selectedVehicle.registrationNumber ?? '');
+                  setManufactureYear(
+                    selectedVehicle.manufactureYear?.toString() ?? '',
+                  );
+                  setEditingVehicle(selectedVehicle);
+                  setActionError(null);
+                  setShowAddVehicleModal(true);
+                  setSelectedVehicleId(null);
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              >
+                Edit Vehicle
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActionError(null);
+                  setShowOdometerModal(true);
+                }}
                 className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 Log Odometer
@@ -196,12 +268,24 @@ export function VehiclesPage({
                 type="button"
                 onClick={() => {
                   resetPartForm();
+                  setActionError(null);
                   setShowAddPartModal(true);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 <PlusIcon className="h-4 w-4" />
                 Add Component
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVehiclePendingDeletion(selectedVehicle);
+                  setActionError(null);
+                  setShowDeleteConfirm(true);
+                }}
+                className="rounded-lg border border-red-600 bg-white px-3.5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+              >
+                Delete Vehicle
               </button>
             </>
           }
@@ -249,6 +333,7 @@ export function VehiclesPage({
                         setPartName(part.partName);
                         setCategory(part.category ?? '');
                         setReplacingPart(part);
+                        setActionError(null);
                       }}
                       className="self-start rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:self-center"
                     >
@@ -328,6 +413,9 @@ export function VehiclesPage({
           }}
         >
           <form onSubmit={handlePartSubmit} className="space-y-4">
+            {actionError ? (
+              <p role="alert" className="text-sm text-red-700">{actionError}</p>
+            ) : null}
             <div>
               <label
                 htmlFor="part-name"
@@ -478,6 +566,9 @@ export function VehiclesPage({
           onClose={() => setShowOdometerModal(false)}
         >
           <form onSubmit={handleOdometerSubmit} className="space-y-4">
+            {actionError ? (
+              <p role="alert" className="text-sm text-red-700">{actionError}</p>
+            ) : null}
             <div>
               <label
                 htmlFor="odo-km"
@@ -528,6 +619,46 @@ export function VehiclesPage({
             </div>
           </form>
         </Modal>
+
+        <Modal
+          isOpen={showDeleteConfirm}
+          title="Delete Vehicle?"
+          description={`Delete ${vehiclePendingDeletion?.brand ?? ''} ${vehiclePendingDeletion?.model ?? ''}? This permanently removes its components, maintenance schedules and records, and odometer history.`}
+          onClose={() => {
+            if (!isDeletingVehicle) {
+              setShowDeleteConfirm(false);
+              setVehiclePendingDeletion(null);
+              setActionError(null);
+            }
+          }}
+        >
+          {actionError ? (
+            <p role="alert" className="mb-4 text-sm text-red-700">{actionError}</p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={isDeletingVehicle}
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                setVehiclePendingDeletion(null);
+                setActionError(null);
+              }}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeletingVehicle || !vehiclePendingDeletion}
+              onClick={handleDeleteVehicle}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {isDeletingVehicle ? 'Deleting…' : 'Confirm Delete'}
+            </button>
+          </div>
+        </Modal>
+
       </div>
     );
   }
@@ -540,7 +671,16 @@ export function VehiclesPage({
         actions={
           <button
             type="button"
-            onClick={() => setShowAddVehicleModal(true)}
+            onClick={() => {
+              setEditingVehicle(null);
+              setVehicleType('FOUR_WHEELER');
+              setBrand('');
+              setModel('');
+              setRegistrationNumber('');
+              setManufactureYear('');
+              setActionError(null);
+              setShowAddVehicleModal(true);
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           >
             <PlusIcon className="h-4 w-4" />
@@ -557,7 +697,11 @@ export function VehiclesPage({
           action={
             <button
               type="button"
-              onClick={() => setShowAddVehicleModal(true)}
+              onClick={() => {
+                setEditingVehicle(null);
+                setActionError(null);
+                setShowAddVehicleModal(true);
+              }}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
               Add your first vehicle
@@ -618,13 +762,26 @@ export function VehiclesPage({
                 </div>
 
                 <div className="mt-5 border-t border-slate-100 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedVehicleId(vehicle.id)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                  >
-                    View Vehicle Details
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVehicleId(vehicle.id)}
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                    >
+                      View Vehicle Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVehiclePendingDeletion(vehicle);
+                        setActionError(null);
+                        setShowDeleteConfirm(true);
+                      }}
+                      className="rounded-lg border border-red-600 bg-white px-3.5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -635,11 +792,22 @@ export function VehiclesPage({
       {/* Add Vehicle Modal */}
       <Modal
         isOpen={showAddVehicleModal}
-        title="Add Vehicle"
-        description="Register a two-wheeler or four-wheeler in your garage."
-        onClose={() => setShowAddVehicleModal(false)}
+        title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
+        description={
+          editingVehicle
+            ? 'Update your registered vehicle details.'
+            : 'Register a two-wheeler or four-wheeler in your garage.'
+        }
+        onClose={() => {
+          setShowAddVehicleModal(false);
+          setEditingVehicle(null);
+          setActionError(null);
+        }}
       >
         <form onSubmit={handleVehicleSubmit} className="space-y-4">
+          {actionError ? (
+            <p role="alert" className="text-sm text-red-700">{actionError}</p>
+          ) : null}
           <div>
             <label
               htmlFor="veh-type"
@@ -735,7 +903,11 @@ export function VehiclesPage({
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setShowAddVehicleModal(false)}
+              onClick={() => {
+                setShowAddVehicleModal(false);
+                setEditingVehicle(null);
+                setActionError(null);
+              }}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Cancel
@@ -744,10 +916,52 @@ export function VehiclesPage({
               type="submit"
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
-              Save Vehicle
+              {editingVehicle ? 'Save Changes' : 'Save Vehicle'}
             </button>
           </div>
         </form>
+      </Modal>
+      <Modal
+        isOpen={showDeleteConfirm}
+        title="Delete Vehicle?"
+        description={
+          vehiclePendingDeletion
+            ? `Delete ${vehiclePendingDeletion.brand} ${vehiclePendingDeletion.model}? This permanently removes its components, maintenance schedules and records, and odometer history.`
+            : 'This permanently removes the vehicle and its associated history.'
+        }
+        onClose={() => {
+          if (!isDeletingVehicle) {
+            setShowDeleteConfirm(false);
+            setVehiclePendingDeletion(null);
+            setActionError(null);
+          }
+        }}
+      >
+        {actionError ? (
+          <p role="alert" className="mb-4 text-sm text-red-700">{actionError}</p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={isDeletingVehicle}
+            onClick={() => {
+              setShowDeleteConfirm(false);
+              setVehiclePendingDeletion(null);
+              setActionError(null);
+            }}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isDeletingVehicle || !vehiclePendingDeletion}
+            onClick={handleDeleteVehicle}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {isDeletingVehicle ? 'Deleting…' : 'Confirm Delete'}
+          </button>
+        </div>
       </Modal>
     </div>
   );
